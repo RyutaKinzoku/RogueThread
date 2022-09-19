@@ -69,10 +69,10 @@ int heroAD = 1; // Hero attack damage
 char command = 0;
 
 int *monsterHealths;
+int *monsterStatus;
 
 struct args {
   int id;
-  int attack;
   int pos[2];
 };
 
@@ -102,56 +102,57 @@ void* changeHeroState(void* data){
     //The different commands of the game
     if(command=='w'){
         printf("Go up!\n");
+        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]-1][heroPosition[1]] != 0 && heroPosition[0] > 0 && entityMap[heroPosition[0]-1][heroPosition[1]] == 0){
           heroPosition[0] -= 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
-            pthread_mutex_lock(&mutex_entitys);
             heroHealth--;// Fall in a trap
-            pthread_mutex_unlock(&mutex_entitys);
             map[heroPosition[0]][heroPosition[1]] = 3;
           }
         }
+        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='a'){
         printf("Go left!\n");
+        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]][heroPosition[1]-1] != 0 && heroPosition[1] > 0 && entityMap[heroPosition[0]][heroPosition[1]-1] == 0){
           heroPosition[1] -= 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
-            pthread_mutex_lock(&mutex_entitys);
             heroHealth--;// Fall in a trap
-            pthread_mutex_unlock(&mutex_entitys);
             map[heroPosition[0]][heroPosition[1]] = 3;
           }
         }
+        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='s'){
         printf("Go down!\n");
+        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]+1][heroPosition[1]] != 0 && heroPosition[0] < n-1 && entityMap[heroPosition[0]+1][heroPosition[1]] == 0){
           heroPosition[0] += 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
-            pthread_mutex_lock(&mutex_entitys);
             heroHealth--;// Fall in a trap
-            pthread_mutex_unlock(&mutex_entitys);
             map[heroPosition[0]][heroPosition[1]] = 3;
           }
         }
+        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='d'){
         printf("Go right!\n");
+        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]][heroPosition[1]+1] != 0 && heroPosition[1] < n-1 && entityMap[heroPosition[0]][heroPosition[1]+1] == 0){
           heroPosition[1] += 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
-            pthread_mutex_lock(&mutex_entitys);
             heroHealth--;// Fall in a trap
-            pthread_mutex_unlock(&mutex_entitys);
             map[heroPosition[0]][heroPosition[1]] = 3;
           }
         }
+        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command==' '){
-        if(entityMap[heroPosition[0]][heroPosition[1]] > 0){
+        int entity = entityMap[heroPosition[0]][heroPosition[1]];
+        if(entity > 0 && monsterStatus[entity-1] == 0){
           printf("Attack monster!\n");
-          monsterHealths[entityMap[heroPosition[0]][heroPosition[1]]-1] -= heroAD;
+          monsterHealths[entity-1] -= heroAD;
         }
     } else if(command=='e'){
         if(entityMap[heroPosition[0]][heroPosition[1]] == 5){
@@ -248,7 +249,9 @@ void *monsterCycle(void *data) {
              info->pos[0], info->pos[1], monsterHealths[info->id]);
     }
     //usleep MUST be a random between 100000 and 500000 microseconds
+    monsterStatus[info->id] = 0; //Monster waiting
     usleep(ranNum);             // 100000 - 500000 microseconds = 0.1 - 0.5 seconds
+    monsterStatus[info->id] = 1; //Active monster
   }
   pthread_mutex_lock(&mutex_entitys);
   entityMap[info->pos[0]][info->pos[1]] = 0;
@@ -261,6 +264,8 @@ int main(void) {
   int nMonsters = floor(n / 2);
   int monsterHLocal[n]; // Allocate memory to the global monsterHealths array
   monsterHealths = monsterHLocal;
+  int monsterSLocal[n]; // Allocate memory to the global monsterStatus array
+  monsterStatus = monsterSLocal;
   pthread_t monsters[nMonsters];
   pthread_mutex_init(&mutex_entitys, NULL);
 
@@ -269,8 +274,8 @@ int main(void) {
     // init monster
     struct args *monster = (struct args *)malloc(sizeof(struct args));
     monster->id = i;
-    monster->attack = 1;
     monsterHLocal[i] = 3;//3 is the original health value
+    monsterSLocal[i] = 1;//Monster active
     // Select a cell for it
     int j = rand() % 10;
     int k = rand() % 10;
