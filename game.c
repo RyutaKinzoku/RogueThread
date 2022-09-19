@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
+#include <stdbool.h>
+
 //#include <graphics.h>
 
 // Test function ----------------------------------------------------------------------------
@@ -75,6 +77,164 @@ struct args {
   int id;
   int pos[2];
 };
+
+int rooms[30][2];
+
+// This function chooses what to place in any given room
+int place(int n){
+  if (n == 1){
+   return 2; 
+  }
+  int room = (rand() % (11));
+  if (room <= 3){
+    return 5;
+  }else if (3 < room && room <= 7){
+    return 4;
+  }else if (7 < room && room <= 10){
+    return 3;
+  } 
+  return 3;
+}
+
+// This function determines if adjacent rooms can afford to have a new adjacent room
+bool check2(int n,int i, int j){
+  int available = 0;
+  if(i <= n && j <= n && i >= 0 && j >= 0){ //check if the coordinates are in the matrix
+    if(i+1 <= n){
+      if(map[i+1][j] == 0){ //check if room is a wall
+        available++;
+      }
+    }
+    if(i-1 >= 0){
+      if(map[i-1][j] == 0){
+        available++;
+      }
+    }
+    if(j+1 <= n){
+      if(map[i][j+1] == 0){
+        available++;
+      }
+    }
+    if(j-1 >= 0){
+      if(map[i][j-1] == 0){
+        available++;
+      }
+    }
+    if (available > 2){
+      return true; 
+    }
+    return false;
+  }else{
+    return false;
+  }
+}
+
+// This function determines if placing a new room in the given coordinates is viable
+bool check(int n,int i, int j){
+  int available = 0;
+  bool secondCheck = false;
+  if(i <= n && j <= n && i >= 0 && j >= 0){  //check if the coordinates are in the matrix  
+    if(i+1 <= n){
+      secondCheck = check2(n, i+1, j);
+      if(map[i+1][j] == 0 && secondCheck){
+        available++;
+      }
+    }
+    if(i-1 >= 0){
+      secondCheck = check2(n, i-1, j);
+      if(map[i-1][j] == 0 && secondCheck){
+        available++;
+      }
+    }
+    if(j+1 <= n){
+      secondCheck = check2(n, i, j+1);
+      if(map[i][j+1] == 0 && secondCheck){
+        available++;
+      }
+    }
+    if(j-1 >= 0){
+      secondCheck = check2(n, i, j-1);
+      if(map[i][j-1] == 0 && secondCheck){
+        available++;
+      }
+    }
+    if (available > 1){
+      return true;
+    }
+    return false;
+  }else{
+    return false;
+  }
+}
+
+// This function chooses where to branch off a new room
+int choose(int n, int quantity){
+  bool viable = false;
+  int room = 0;
+  while(!viable){ //repeat until vible room is found
+    room = (rand() % (quantity - 0 + 1)); 
+    /*for(int i = 0; i < n; i++){
+      for(int j = 0; j < n; j++){
+        if(map[i][j] != 0){
+          printf("%d\t",map[i][j]); 
+        }else{
+          printf(" \t"); 
+        }
+      }
+      printf("\n");
+    }
+    sleep(1);*/
+    viable = check(n, rooms[room][0], rooms[room][1]); //check if the room is viable
+  }
+  return room;
+}
+
+// This recursive function takes care of calling the necessary functions to put n rooms in the map
+void fill(int n, int i, int j,int m){
+  bool placed = false;
+  int room = 0;
+  if(m > 0){
+    while(!placed){
+      room = (rand() % (4))+1;
+      
+      if(room==1 && map[i+1][j] == 0){
+        placed = check(n, i+1, j);
+        if (placed){
+          map[i+1][j] = place(m);
+          i++;
+        }
+      }
+      if (room==2 && map[i-1][j] == 0){
+        placed = check(n, i-1, j);
+        if (placed){
+          map[i-1][j] = place(m);
+          i--;
+        }
+      }
+      if (room==3 && map[i][j+1] == 0){
+        placed = check(n, i, j+1);
+        if (placed){
+          map[i][j+1] = place(m);
+          j++;
+        }
+      }
+      if (room==4 && map[i][j-1] == 0){
+        placed = check(n, i, j-1);
+        if (placed){
+          map[i][j-1] = place(m);
+          j--;
+        }
+      }
+    }
+  m--;
+  rooms[n-m][0] = i;
+  rooms[n-m][1] = j; // add a new room to the list
+  int chosenRoom = choose(n,n-m); // choose a new room to branch off a new path
+  fill(n,rooms[chosenRoom][0],rooms[chosenRoom][1],m);
+  }else{
+    return;
+  }
+}
 
 // This thread works as a listener of keyboard events
 void* catchKeyEvent(void* data){
@@ -261,6 +421,26 @@ void *monsterCycle(void *data) {
 
 int main(void) {
   n = 10;//It MUST be changed for the user input
+
+  /*
+  int upper = n-1;
+  for(int i = 0; i < n-1; i++){
+    for(int j = 0; j < n-1; j++){
+      map[i][j] = 0; //fill the map with walls
+    }
+  }
+  
+  srand(time(0));
+  int i = (rand() % (upper - 0 + 1));
+  int j = (rand() % (upper - 0 + 1)); //choose the starting room
+  map[i][j] = 1; 
+  rooms[0][0] = i;
+  rooms[0][1] = j; //add first room to list
+  int m = n-1;
+  fill(n-1,i,j,m); //fill the map for the game
+  printf("Dungeon Done\n");
+  */
+
   int nMonsters = floor(n / 2);
   int monsterHLocal[n]; // Allocate memory to the global monsterHealths array
   monsterHealths = monsterHLocal;
