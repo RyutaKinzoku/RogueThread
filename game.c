@@ -78,17 +78,17 @@ struct args {
 
 // This thread works as a listener of keyboard events
 void* catchKeyEvent(void* data){
-   while(heroHealth>0){
-      pthread_mutex_lock(&command_mutex);
-      if(kbhit())
-      {
-         command = getchar(); //Fill the command buffer
-         pthread_cond_signal(&command_condition); //Send a signal to inform the thread of changing the state of the hero that a key has just pressed
-      }
-      pthread_mutex_unlock(&command_mutex);
-      sleep(0.1); //This line avoid active waiting
-   }
-   pthread_exit(NULL);
+  while(heroHealth>0){
+    pthread_mutex_lock(&command_mutex);
+    if(kbhit())
+    {
+        command = getchar(); //Fill the command buffer
+        pthread_cond_signal(&command_condition); //Send a signal to inform the thread of changing the state of the hero that a key has just pressed
+    }
+    pthread_mutex_unlock(&command_mutex);
+    sleep(0.1); //This line avoid active waiting
+  }
+  pthread_exit(NULL);
 }
 
 // This thread applies user commads to hero state
@@ -170,7 +170,6 @@ void* changeHeroState(void* data){
           }
         }
     }
-    heroHealth--;
   }
 
   pthread_join(catchEvents, NULL); //Join with the listener thread
