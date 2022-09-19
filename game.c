@@ -80,10 +80,11 @@ struct args {
 };
 
 int rooms[30][2];
+//int map[30][30];
 
 // This function chooses what to place in any given room
-int place(int n){
-  if (n == 1){
+int place(int m){
+  if (m == 1){
    return 2; 
   }
   int room = (rand() % (11));
@@ -98,10 +99,10 @@ int place(int n){
 }
 
 // This function determines if adjacent rooms can afford to have a new adjacent room
-bool check2(int n,int i, int j){
+bool check2(int i, int j){
   int available = 0;
-  if(i <= n && j <= n && i >= 0 && j >= 0){ //check if the coordinates are in the matrix
-    if(i+1 <= n){
+  if(i <= (n-1) && j <= (n-1) && i >= 0 && j >= 0){ //check if the coordinates are in the matrix   
+    if(i+1 <= (n-1)){
       if(map[i+1][j] == 0){ //check if room is a wall
         available++;
       }
@@ -122,7 +123,7 @@ bool check2(int n,int i, int j){
       }
     }
     if (available > 2){
-      return true; 
+      return true;
     }
     return false;
   }else{
@@ -131,30 +132,30 @@ bool check2(int n,int i, int j){
 }
 
 // This function determines if placing a new room in the given coordinates is viable
-bool check(int n,int i, int j){
+bool check(int i, int j){
   int available = 0;
   bool secondCheck = false;
-  if(i <= n && j <= n && i >= 0 && j >= 0){  //check if the coordinates are in the matrix  
-    if(i+1 <= n){
-      secondCheck = check2(n, i+1, j);
+  if(i <= (n-1) && j <= (n-1) && i >= 0 && j >= 0){    
+    if(i+1 <= (n-1)){
+      secondCheck = check2(i+1, j);
       if(map[i+1][j] == 0 && secondCheck){
         available++;
       }
     }
     if(i-1 >= 0){
-      secondCheck = check2(n, i-1, j);
+      secondCheck = check2(i-1, j);
       if(map[i-1][j] == 0 && secondCheck){
         available++;
       }
     }
     if(j+1 <= n){
-      secondCheck = check2(n, i, j+1);
+      secondCheck = check2(i, j+1);
       if(map[i][j+1] == 0 && secondCheck){
         available++;
       }
     }
     if(j-1 >= 0){
-      secondCheck = check2(n, i, j-1);
+      secondCheck = check2(i, j-1);
       if(map[i][j-1] == 0 && secondCheck){
         available++;
       }
@@ -169,11 +170,11 @@ bool check(int n,int i, int j){
 }
 
 // This function chooses where to branch off a new room
-int choose(int n, int quantity){
+int choose(int quantity){
   bool viable = false;
   int room = 0;
   while(!viable){ //repeat until vible room is found
-    room = (rand() % (quantity - 0 + 1)); 
+    room = (rand() % (quantity - 0 + 1));
     /*for(int i = 0; i < n; i++){
       for(int j = 0; j < n; j++){
         if(map[i][j] != 0){
@@ -185,13 +186,13 @@ int choose(int n, int quantity){
       printf("\n");
     }
     sleep(1);*/
-    viable = check(n, rooms[room][0], rooms[room][1]); //check if the room is viable
+    viable = check(rooms[room][0], rooms[room][1]); //check if the room is viable
   }
   return room;
 }
 
 // This recursive function takes care of calling the necessary functions to put n rooms in the map
-void fill(int n, int i, int j,int m){
+void fill(int i, int j,int m){
   bool placed = false;
   int room = 0;
   if(m > 0){
@@ -199,28 +200,28 @@ void fill(int n, int i, int j,int m){
       room = (rand() % (4))+1;
       
       if(room==1 && map[i+1][j] == 0){
-        placed = check(n, i+1, j);
+        placed = check(i+1, j);
         if (placed){
           map[i+1][j] = place(m);
           i++;
         }
       }
       if (room==2 && map[i-1][j] == 0){
-        placed = check(n, i-1, j);
+        placed = check(i-1, j);
         if (placed){
           map[i-1][j] = place(m);
           i--;
         }
       }
       if (room==3 && map[i][j+1] == 0){
-        placed = check(n, i, j+1);
+        placed = check(i, j+1);
         if (placed){
           map[i][j+1] = place(m);
           j++;
         }
       }
       if (room==4 && map[i][j-1] == 0){
-        placed = check(n, i, j-1);
+        placed = check(i, j-1);
         if (placed){
           map[i][j-1] = place(m);
           j--;
@@ -228,10 +229,10 @@ void fill(int n, int i, int j,int m){
       }
     }
   m--;
-  rooms[n-m][0] = i;
-  rooms[n-m][1] = j; // add a new room to the list
-  int chosenRoom = choose(n,n-m); // choose a new room to branch off a new path
-  fill(n,rooms[chosenRoom][0],rooms[chosenRoom][1],m);
+  rooms[(n-1)-m][0] = i;
+  rooms[(n-1)-m][1] = j; // add a new room to the list
+  int chosenRoom = choose((n-1)-m);
+  fill(rooms[chosenRoom][0],rooms[chosenRoom][1],m); // choose a new room to branch off a new path
   }else{
     return;
   }
@@ -456,18 +457,18 @@ int main(void) {
   int upper = n-1;
   for(int i = 0; i < n-1; i++){
     for(int j = 0; j < n-1; j++){
-      map[i][j] = 0; //fill the map with walls
+      map[i][j] = 0;
     }
   }
   
   srand(time(0));
   int i = (rand() % (upper - 0 + 1));
   int j = (rand() % (upper - 0 + 1)); //choose the starting room
-  map[i][j] = 1; 
+  map[i][j] = 1;
   rooms[0][0] = i;
   rooms[0][1] = j; //add first room to list
   int m = n-1;
-  fill(n-1,i,j,m); //fill the map for the game
+  fill(i,j,m); //fill the map for the game
   printf("Dungeon Done\n");
   */
 
