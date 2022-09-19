@@ -3,27 +3,71 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <graphics.h>
+#include <termios.h>
+#include <fcntl.h>
+//#include <graphics.h>
+
+// Test function ----------------------------------------------------------------------------
+int kbhit(void)
+{
+  struct termios oldt, newt;
+  int ch;
+  int oldf;
+
+  tcgetattr(STDIN_FILENO, &oldt);
+  newt = oldt;
+  newt.c_lflag &= ~(ICANON | ECHO);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+  oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+  fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+
+  ch = getchar();
+
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+  fcntl(STDIN_FILENO, F_SETFL, oldf);
+
+  if(ch != EOF)
+  {
+    ungetc(ch, stdin);
+    return 1;
+  }
+
+  return 0;
+}
+// ------------------------------------------------------------------------------------------
 
 int n;
 int map[10][10] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 2, 3, 3, 0, 0, 0, 0, 0}, {0, 0, 3, 0, 3, 0, 0, 0, 0, 0},
-    {0, 0, 3, 3, 3, 3, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 2, 3, 3, 0, 0, 0, 0, 0}, 
+    {0, 0, 3, 0, 3, 0, 0, 0, 0, 0},
+    {0, 0, 3, 3, 3, 3, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 
 int entityMap[10][10] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 
 int heroPosition[2] = {5, 5};
-int heroHealth = 5;
+pthread_cond_t command_condition;
+pthread_mutex_t command_mutex, mutex_entitys;
+int heroHealth = 100;
+int heroAD = 1; // Hero attack damage
+char command = 0;
 
-pthread_mutex_t mutex_entitys;
 int *monsterHealths;
 
 struct args {
@@ -32,10 +76,116 @@ struct args {
   int pos[2];
 };
 
+// This thread works as a listener of keyboard events
+void* catchKeyEvent(void* data){
+   while(heroHealth>0){
+      pthread_mutex_lock(&command_mutex);
+      if(kbhit())
+      {
+         command = getchar(); //Fill the command buffer
+         pthread_cond_signal(&command_condition); //Send a signal to inform the thread of changing the state of the hero that a key has just pressed
+      }
+      pthread_mutex_unlock(&command_mutex);
+      sleep(0.1); //This line avoid active waiting
+   }
+   pthread_exit(NULL);
+}
+
+// This thread applies user commads to hero state
+void* changeHeroState(void* data){
+  pthread_t catchEvents;
+  pthread_create(&catchEvents, NULL, &catchKeyEvent, NULL); // Create a listener thread
+
+  while(heroHealth>0){
+    pthread_cond_wait(&command_condition, &command_mutex); // Wait until the listener thread send a signal
+
+    //The different commands of the game
+    if(command=='w'){
+        printf("Go up!\n");
+        if(map[heroPosition[0]-1][heroPosition[1]] != 0 && heroPosition[0] > 0 && entityMap[heroPosition[0]-1][heroPosition[1]] == 0){
+          heroPosition[0] -= 1;
+          if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&mutex_entitys);
+            heroHealth--;// Fall in a trap
+            pthread_mutex_unlock(&mutex_entitys);
+            map[heroPosition[0]][heroPosition[1]] = 3;
+          }
+        }
+        printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
+    } else if(command=='a'){
+        printf("Go left!\n");
+        if(map[heroPosition[0]][heroPosition[1]-1] != 0 && heroPosition[1] > 0 && entityMap[heroPosition[0]][heroPosition[1]-1] == 0){
+          heroPosition[1] -= 1;
+          if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&mutex_entitys);
+            heroHealth--;// Fall in a trap
+            pthread_mutex_unlock(&mutex_entitys);
+            map[heroPosition[0]][heroPosition[1]] = 3;
+          }
+        }
+        printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
+    } else if(command=='s'){
+        printf("Go down!\n");
+        if(map[heroPosition[0]+1][heroPosition[1]] != 0 && heroPosition[0] < n-1 && entityMap[heroPosition[0]+1][heroPosition[1]] == 0){
+          heroPosition[0] += 1;
+          if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&mutex_entitys);
+            heroHealth--;// Fall in a trap
+            pthread_mutex_unlock(&mutex_entitys);
+            map[heroPosition[0]][heroPosition[1]] = 3;
+          }
+        }
+        printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
+    } else if(command=='d'){
+        printf("Go right!\n");
+        if(map[heroPosition[0]][heroPosition[1]+1] != 0 && heroPosition[1] < n-1 && entityMap[heroPosition[0]][heroPosition[1]+1] == 0){
+          heroPosition[1] += 1;
+          if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&mutex_entitys);
+            heroHealth--;// Fall in a trap
+            pthread_mutex_unlock(&mutex_entitys);
+            map[heroPosition[0]][heroPosition[1]] = 3;
+          }
+        }
+        printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
+    } else if(command==' '){
+        if(entityMap[heroPosition[0]][heroPosition[1]] > 0){
+          printf("Attack monster!\n");
+          monsterHealths[entityMap[heroPosition[0]][heroPosition[1]]-1] -= heroAD;
+        }
+    } else if(command=='e'){
+        if(entityMap[heroPosition[0]][heroPosition[1]] == 5){
+          printf("Open a treasure!\n");
+          unsigned int randval;
+          FILE *f = fopen("/dev/random", "r");
+          fread(&randval, sizeof(randval), 1, f);
+          fclose(f);
+          int ranNum = randval % 1;
+          if(ranNum){
+            heroAD++; //Boost one point of the hero attack damage
+          } else {
+            pthread_mutex_lock(&mutex_entitys);
+            heroHealth++;// Heal one health point
+            pthread_mutex_unlock(&mutex_entitys);
+          }
+        }
+    }
+    heroHealth--;
+  }
+
+  pthread_join(catchEvents, NULL); //Join with the listener thread
+  pthread_exit(NULL);
+}
+
 void *monsterCycle(void *data) {
   struct args *info = data;
   // printf("monster in pos %d, %d\n", info->pos[0], info->pos[1]);
   while (monsterHealths[info->id] > 0) {
+    unsigned int randval;
+    FILE *f = fopen("/dev/random", "r");
+    fread(&randval, sizeof(randval), 1, f);
+    fclose(f);
+    int ranNum = randval % 400000 + 100000;
     printf("monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
     if (info->pos[0] == heroPosition[0] && info->pos[1] == heroPosition[1]) { // If player is in the same room
       pthread_mutex_lock(&mutex_entitys);
@@ -45,6 +195,7 @@ void *monsterCycle(void *data) {
     else { // If the monster is alone
       int futurePos[4], overflow[4];
       int j;
+      pthread_mutex_lock(&mutex_entitys); // Lock the new monster position
       for (int i = 0; i < 4; i++) {
         j = i < 2; // To jump between rows and columns cheking the 4 neighbors cells
         // future positions
@@ -83,25 +234,26 @@ void *monsterCycle(void *data) {
         while (overflow[cell] == 1) {
           cell = rand() % 4;
         }
-        pthread_mutex_lock(&mutex_entitys);
         if (cell < 2) { // left & right - change column
           entityMap[info->pos[0]][info->pos[1]] = 0;
           info->pos[1] = futurePos[cell];
-          entityMap[info->pos[0]][info->pos[1]] = 2;
+          entityMap[info->pos[0]][info->pos[1]] = info->id+1;
         } else { // up & down - change row
           entityMap[info->pos[0]][info->pos[1]] = 0;
           info->pos[0] = futurePos[cell];
-          entityMap[info->pos[0]][info->pos[1]] = 2;
+          entityMap[info->pos[0]][info->pos[1]] = info->id+1;
         }
-        pthread_mutex_unlock(&mutex_entitys);
       }
+      pthread_mutex_unlock(&mutex_entitys);
       printf("NEW monster %d\n\tpos %d, %d\n\thealth %d \n", info->id,
              info->pos[0], info->pos[1], monsterHealths[info->id]);
     }
-    monsterHealths[info->id]--; // REMOVE LATER
     //usleep MUST be a random between 100000 and 500000 microseconds
-    usleep(500000);             // 500000 microseconds = 0.5 seconds
+    usleep(ranNum);             // 100000 - 500000 microseconds = 0.1 - 0.5 seconds
   }
+  pthread_mutex_lock(&mutex_entitys);
+  entityMap[info->pos[0]][info->pos[1]] = 0;
+  pthread_mutex_unlock(&mutex_entitys);
   pthread_exit(NULL);
 }
 
@@ -134,15 +286,21 @@ int main(void) {
     pthread_create(&monsters[i], NULL, &monsterCycle, (void *)monster);
   }
 
+  // Hero part
+  //Initialize mutexes and conditions
+  pthread_mutex_init(&command_mutex, NULL);
+  pthread_cond_init(&command_condition, NULL);
+  pthread_t chHeroState;
 
-  // Hero cycle
-  while (1) {
-    break;
-  }
-
+  pthread_create(&chHeroState, NULL, &changeHeroState, NULL);
+  
+  pthread_join(chHeroState, NULL);
   for (int i = 0; i < nMonsters; i++) {
     pthread_join(monsters[i], NULL);
   }
+  //Destroy mutexes and conditions
+  pthread_mutex_destroy(&command_mutex);
+  pthread_cond_destroy(&command_condition);
   pthread_mutex_destroy(&mutex_entitys);
   return 0;
 }
