@@ -64,7 +64,7 @@ int entityMap[10][10] = {
 int heroPosition[2] = {5, 5};
 pthread_cond_t command_condition;
 pthread_mutex_t command_mutex, mutex_entitys;
-int heroHealth = 100;
+int heroHealth = 5;
 int heroAD = 1; // Hero attack damage
 char command = 0;
 
