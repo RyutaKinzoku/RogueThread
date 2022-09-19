@@ -65,10 +65,11 @@ int entityMap[10][10] = {
 
 int heroPosition[2] = {5, 5};
 pthread_cond_t command_condition;
-pthread_mutex_t command_mutex, mutex_entitys;
+pthread_mutex_t command_mutex, mutex_entitys, health_mutex;
 int heroHealth = 5;
 int heroAD = 1; // Hero attack damage
 char command = 0;
+int runState = 0;
 
 int *monsterHealths;
 int *monsterStatus;
@@ -238,7 +239,7 @@ void fill(int n, int i, int j,int m){
 
 // This thread works as a listener of keyboard events
 void* catchKeyEvent(void* data){
-  while(heroHealth>0){
+  while(heroHealth>0 && runState == 0){ //Run state
     pthread_mutex_lock(&command_mutex);
     if(kbhit())
     {
@@ -256,57 +257,78 @@ void* changeHeroState(void* data){
   pthread_t catchEvents;
   pthread_create(&catchEvents, NULL, &catchKeyEvent, NULL); // Create a listener thread
 
-  while(heroHealth>0){
+  while(heroHealth>0 && runState == 0){
     pthread_cond_wait(&command_condition, &command_mutex); // Wait until the listener thread send a signal
 
     //The different commands of the game
     if(command=='w'){
         printf("Go up!\n");
-        pthread_mutex_lock(&mutex_entitys);
+        
         if(map[heroPosition[0]-1][heroPosition[1]] != 0 && heroPosition[0] > 0 && entityMap[heroPosition[0]-1][heroPosition[1]] == 0){
           heroPosition[0] -= 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&health_mutex);
             heroHealth--;// Fall in a trap
+            if(heroHealth <= 0){
+              runState = 2; // Defeat runState Value
+            } 
+            pthread_mutex_unlock(&health_mutex);
             map[heroPosition[0]][heroPosition[1]] = 3;
+          } else if(map[heroPosition[0]][heroPosition[1]] == 2){
+            runState = 1; // Victory runState value
           }
         }
-        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='a'){
         printf("Go left!\n");
-        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]][heroPosition[1]-1] != 0 && heroPosition[1] > 0 && entityMap[heroPosition[0]][heroPosition[1]-1] == 0){
           heroPosition[1] -= 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&health_mutex);
             heroHealth--;// Fall in a trap
+            if(heroHealth <= 0){
+              runState = 2; // Defeat runState Value
+            } 
+            pthread_mutex_unlock(&health_mutex);
             map[heroPosition[0]][heroPosition[1]] = 3;
+          } else if(map[heroPosition[0]][heroPosition[1]] == 2){
+            runState = 1; // Victory runState value
           }
         }
-        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='s'){
         printf("Go down!\n");
-        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]+1][heroPosition[1]] != 0 && heroPosition[0] < n-1 && entityMap[heroPosition[0]+1][heroPosition[1]] == 0){
           heroPosition[0] += 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&health_mutex);
             heroHealth--;// Fall in a trap
+            if(heroHealth <= 0){
+              runState = 2; // Defeat runState Value
+            } 
+            pthread_mutex_unlock(&health_mutex);
             map[heroPosition[0]][heroPosition[1]] = 3;
+          } else if(map[heroPosition[0]][heroPosition[1]] == 2){
+            runState = 1; // Victory runState value
           }
         }
-        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command=='d'){
         printf("Go right!\n");
-        pthread_mutex_lock(&mutex_entitys);
         if(map[heroPosition[0]][heroPosition[1]+1] != 0 && heroPosition[1] < n-1 && entityMap[heroPosition[0]][heroPosition[1]+1] == 0){
           heroPosition[1] += 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
+            pthread_mutex_lock(&health_mutex);
             heroHealth--;// Fall in a trap
+            if(heroHealth <= 0){
+              runState = 2; // Defeat runState Value
+            } 
+            pthread_mutex_unlock(&health_mutex);
             map[heroPosition[0]][heroPosition[1]] = 3;
+          } else if(map[heroPosition[0]][heroPosition[1]] == 2){
+            runState = 1; // Victory runState value
           }
         }
-        pthread_mutex_unlock(&mutex_entitys);
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
     } else if(command==' '){
         int entity = entityMap[heroPosition[0]][heroPosition[1]];
@@ -325,9 +347,9 @@ void* changeHeroState(void* data){
           if(ranNum){
             heroAD++; //Boost one point of the hero attack damage
           } else {
-            pthread_mutex_lock(&mutex_entitys);
+            pthread_mutex_lock(&health_mutex);
             heroHealth++;// Heal one health point
-            pthread_mutex_unlock(&mutex_entitys);
+            pthread_mutex_unlock(&health_mutex);
           }
         }
     }
@@ -340,7 +362,7 @@ void* changeHeroState(void* data){
 void *monsterCycle(void *data) {
   struct args *info = data;
   // printf("monster in pos %d, %d\n", info->pos[0], info->pos[1]);
-  while (monsterHealths[info->id] > 0) {
+  while (monsterHealths[info->id] > 0 && runState == 0) {
     unsigned int randval;
     FILE *f = fopen("/dev/random", "r");
     fread(&randval, sizeof(randval), 1, f);
@@ -348,9 +370,12 @@ void *monsterCycle(void *data) {
     int ranNum = randval % 400000 + 100000;
     printf("monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
     if (info->pos[0] == heroPosition[0] && info->pos[1] == heroPosition[1]) { // If player is in the same room
-      pthread_mutex_lock(&mutex_entitys);
+      pthread_mutex_lock(&health_mutex);
       heroHealth--;// Attack player
-      pthread_mutex_unlock(&mutex_entitys);
+      if(heroHealth <= 0){
+        runState = 2; // Defeat runState Value
+      } 
+      pthread_mutex_unlock(&health_mutex);
     } 
     else { // If the monster is alone
       int futurePos[4], overflow[4];
@@ -420,6 +445,11 @@ void *monsterCycle(void *data) {
 }
 
 int main(void) {
+  //Initialize mutexes and conditions
+  pthread_mutex_init(&command_mutex, NULL);
+  pthread_mutex_init(&health_mutex, NULL);
+  pthread_cond_init(&command_condition, NULL);
+
   n = 10;//It MUST be changed for the user input
 
   /*
@@ -471,20 +501,22 @@ int main(void) {
   }
 
   // Hero part
-  //Initialize mutexes and conditions
-  pthread_mutex_init(&command_mutex, NULL);
-  pthread_cond_init(&command_condition, NULL);
   pthread_t chHeroState;
 
   pthread_create(&chHeroState, NULL, &changeHeroState, NULL);
+
+  //Rendering cycle
   
+  //Synchronize threads
   pthread_join(chHeroState, NULL);
   for (int i = 0; i < nMonsters; i++) {
     pthread_join(monsters[i], NULL);
   }
+
   //Destroy mutexes and conditions
   pthread_mutex_destroy(&command_mutex);
   pthread_cond_destroy(&command_condition);
   pthread_mutex_destroy(&mutex_entitys);
+  pthread_mutex_destroy(&health_mutex);
   return 0;
 }
