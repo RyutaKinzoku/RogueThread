@@ -66,6 +66,8 @@ int entityMap[10][10] = {
 int heroPosition[2] = {5, 5};
 pthread_cond_t command_condition;
 pthread_mutex_t command_mutex, mutex_entitys, health_mutex;
+pthread_mutex_t *cells_mutex;
+
 int heroHealth = 5;
 int heroAD = 1; // Hero attack damage
 char command = 0;
@@ -381,7 +383,6 @@ void *monsterCycle(void *data) {
     else { // If the monster is alone
       int futurePos[4], overflow[4];
       int j;
-      pthread_mutex_lock(&mutex_entitys); // Lock the new monster position
       for (int i = 0; i < 4; i++) {
         j = i < 2; // To jump between rows and columns cheking the 4 neighbors cells
         // future positions
@@ -420,17 +421,18 @@ void *monsterCycle(void *data) {
         while (overflow[cell] == 1) {
           cell = rand() % 4;
         }
+        pthread_mutex_lock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Lock the current cell to move
+        entityMap[info->pos[0]][info->pos[1]] = 0; //free the current cell
+        pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Unlock the current cell to move
         if (cell < 2) { // left & right - change column
-          entityMap[info->pos[0]][info->pos[1]] = 0;
           info->pos[1] = futurePos[cell];
-          entityMap[info->pos[0]][info->pos[1]] = info->id+1;
         } else { // up & down - change row
-          entityMap[info->pos[0]][info->pos[1]] = 0;
           info->pos[0] = futurePos[cell];
-          entityMap[info->pos[0]][info->pos[1]] = info->id+1;
         }
+        pthread_mutex_lock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Lock the future cell to move
+        entityMap[info->pos[0]][info->pos[1]] = info->id+1; //Move to new cell
+        pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);
       }
-      pthread_mutex_unlock(&mutex_entitys);
       printf("NEW monster %d\n\tpos %d, %d\n\thealth %d \n", info->id,
              info->pos[0], info->pos[1], monsterHealths[info->id]);
     }
@@ -472,6 +474,8 @@ int main(void) {
   printf("Dungeon Done\n");
   */
 
+  pthread_mutex_t cells_mutex_local[n*n]; // Allocate memory to the global cells_mutex array
+  cells_mutex = cells_mutex_local;
   int nMonsters = floor(n / 2);
   int monsterHLocal[n]; // Allocate memory to the global monsterHealths array
   monsterHealths = monsterHLocal;
@@ -479,6 +483,9 @@ int main(void) {
   monsterStatus = monsterSLocal;
   pthread_t monsters[nMonsters];
   pthread_mutex_init(&mutex_entitys, NULL);
+  for (int i = 0; i < n*n; i++) {
+    pthread_mutex_init(&cells_mutex[i], NULL);
+  }
 
   // Initialize monsters
   for (int i = 0; i < nMonsters; i++) {
@@ -512,6 +519,10 @@ int main(void) {
   pthread_join(chHeroState, NULL);
   for (int i = 0; i < nMonsters; i++) {
     pthread_join(monsters[i], NULL);
+  }
+
+  for (int i = 0; i < n*n; i++) {
+    pthread_mutex_destroy(&cells_mutex[i]);
   }
 
   //Destroy mutexes and conditions
