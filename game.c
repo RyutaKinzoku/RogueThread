@@ -381,57 +381,22 @@ void *monsterCycle(void *data) {
       pthread_mutex_unlock(&health_mutex);
     } 
     else { // If the monster is alone
-      int futurePos[4], overflow[4];
-      int j;
-      for (int i = 0; i < 4; i++) {
-        j = i < 2; // To jump between rows and columns cheking the 4 neighbors cells
-        // future positions
-        /*
-          futurePos[0] left
-          futurePos[1] right
-          futurePos[2] up
-          futurePos[3] down
-        */
-        if (i % 2) {
-          futurePos[i] = info->pos[j] + 1;
-        } else {
-          futurePos[i] = info->pos[j] - 1;
-        }
-        // Check if it's out of the matrix
-        overflow[i] = (futurePos[i] > 9 || futurePos[i] < 0);
-        // Check if there's a monster in the cell or if it is a wall, start or
-        // end cell
-        if (overflow[i] == 0) {
-          if (j) { // i < 2
-            // Check left & right
-            overflow[i] = entityMap[info->pos[0]][futurePos[i]] > 0 ||
-                          map[info->pos[0]][futurePos[i]] < 3;
-          } else {
-            // Check up & down
-            overflow[i] = entityMap[futurePos[i]][info->pos[1]] > 0 ||
-                          map[futurePos[i]][info->pos[1]] < 3;
-          }
-        }
+      // Select a cell for it
+      int i = rand() % 10;
+      int j = rand() % 10;
+      pthread_mutex_lock(&cells_mutex[i*10+j]);
+      entityMap[info->pos[0]][info->pos[1]] = 0;
+      // If the selected cell isn't a room or already has a monster, change it
+      while (map[i][j] < 3 || entityMap[i][j] > 0) {
+        pthread_mutex_unlock(&cells_mutex[i*10+j]);
+        i = rand() % 10;
+        j = rand() % 10;
+        pthread_mutex_lock(&cells_mutex[i*10+j]);
       }
-      // Select any neighbor cell
-      int cell = rand() % 4;
-      //If it can move, then do it
-      if(!(overflow[0]==overflow[1]==overflow[2]==overflow[3]==1)){
-        // If it has any problem select one that does not have it
-        while (overflow[cell] == 1) {
-          cell = rand() % 4;
-        }
-        entityMap[info->pos[0]][info->pos[1]] = 0; //free the current cell
-        if (cell < 2) { // left & right - change column
-          info->pos[1] = futurePos[cell];
-        } else { // up & down - change row
-          info->pos[0] = futurePos[cell];
-        }
-        pthread_mutex_lock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Lock the future cell to move
-        entityMap[info->pos[0]][info->pos[1]] = info->id+1; //Move to new cell
-        pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);
-      }
-      //printf("NEW monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
+      entityMap[i][j] = info->id + 1; // New pos
+      info->pos[0] = i;
+      info->pos[1] = j;
+      pthread_mutex_unlock(&cells_mutex[i*10+j]);
     }
     //usleep MUST be a random between 100000 and 500000 microseconds
     monsterStatus[info->id] = 0; //Monster waiting
@@ -535,7 +500,7 @@ int main(void) {
         printf("\n");
     }
     printf("\n");
-    sleep(1);
+    //sleep(1);
   }
   //Synchronize threads
   pthread_join(chHeroState, NULL);
