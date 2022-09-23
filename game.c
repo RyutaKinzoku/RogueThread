@@ -421,9 +421,7 @@ void *monsterCycle(void *data) {
         while (overflow[cell] == 1) {
           cell = rand() % 4;
         }
-        pthread_mutex_lock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Lock the current cell to move
         entityMap[info->pos[0]][info->pos[1]] = 0; //free the current cell
-        pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]); //Unlock the current cell to move
         if (cell < 2) { // left & right - change column
           info->pos[1] = futurePos[cell];
         } else { // up & down - change row
@@ -537,6 +535,7 @@ int main(void) {
         printf("\n");
     }
     printf("\n");
+    sleep(1);
   }
   //Synchronize threads
   pthread_join(chHeroState, NULL);
