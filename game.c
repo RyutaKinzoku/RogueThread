@@ -371,7 +371,7 @@ void *monsterCycle(void *data) {
     fread(&randval, sizeof(randval), 1, f);
     fclose(f);
     int ranNum = randval % 400000 + 100000;
-    printf("monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
+    //printf("monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
     if (info->pos[0] == heroPosition[0] && info->pos[1] == heroPosition[1]) { // If player is in the same room
       pthread_mutex_lock(&health_mutex);
       heroHealth--;// Attack player
@@ -433,8 +433,7 @@ void *monsterCycle(void *data) {
         entityMap[info->pos[0]][info->pos[1]] = info->id+1; //Move to new cell
         pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);
       }
-      printf("NEW monster %d\n\tpos %d, %d\n\thealth %d \n", info->id,
-             info->pos[0], info->pos[1], monsterHealths[info->id]);
+      //printf("NEW monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
     }
     //usleep MUST be a random between 100000 and 500000 microseconds
     monsterStatus[info->id] = 0; //Monster waiting
@@ -514,7 +513,31 @@ int main(void) {
   pthread_create(&chHeroState, NULL, &changeHeroState, NULL);
 
   //Rendering cycle
-  
+  while(heroHealth>0){ //Map rendering by text
+    system("clear");
+    printf("\n\n\t Rogue Thread \n\n");
+    printf("Health %d\t Attack %d\n\n", heroHealth, heroAD);
+    for(int i = 0; i < n;i++) {
+        for(int j = 0; j < n;j++) {
+          if(map[i][j] == 0){ //wall
+            printf("■\t");
+          }
+          else if(map[i][j] == 1){//start
+            printf("⛋\t");
+          }
+          else if(map[i][j] == 2){//finish
+            printf("⛾\t");
+          }
+          else if(entityMap[i][j] == 0 && map[i][j]>=3){//empty
+            printf("□\t");
+          }else{
+            printf("%d\t", entityMap[i][j]);
+          }
+        }
+        printf("\n");
+    }
+    printf("\n");
+  }
   //Synchronize threads
   pthread_join(chHeroState, NULL);
   for (int i = 0; i < nMonsters; i++) {
