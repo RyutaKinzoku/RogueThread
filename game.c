@@ -6,8 +6,8 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <stdbool.h>
-
-//#include <graphics.h>
+#include <X11/Xlib.h>
+#include <graphics.h>
 
 // Test function ----------------------------------------------------------------------------
 int kbhit(void)
@@ -39,29 +39,9 @@ int kbhit(void)
 // ------------------------------------------------------------------------------------------
 
 int n;
-int map[10][10] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 2, 3, 3, 0, 0, 0, 0, 0}, 
-    {0, 0, 3, 0, 3, 0, 0, 0, 0, 0},
-    {0, 0, 3, 3, 3, 3, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 1, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+int map[30][30];
 
-int entityMap[10][10] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+int entityMap[30][30];
 
 int heroPosition[2] = {5, 5};
 pthread_cond_t command_condition;
@@ -229,6 +209,7 @@ void fill(int i, int j,int m){
           j--;
         }
       }
+      sleep(0);
     }
   m--;
   rooms[(n-1)-m][0] = i;
@@ -262,11 +243,9 @@ void* changeHeroState(void* data){
 
   while(heroHealth>0 && runState == 0){
     pthread_cond_wait(&command_condition, &command_mutex); // Wait until the listener thread send a signal
-
     //The different commands of the game
     if(command=='w'){
         printf("Go up!\n");
-        
         if(map[heroPosition[0]-1][heroPosition[1]] != 0 && heroPosition[0] > 0 && entityMap[heroPosition[0]-1][heroPosition[1]] == 0){
           heroPosition[0] -= 1;
           if(map[heroPosition[0]][heroPosition[1]] == 4){
@@ -279,6 +258,7 @@ void* changeHeroState(void* data){
             map[heroPosition[0]][heroPosition[1]] = 3;
           } else if(map[heroPosition[0]][heroPosition[1]] == 2){
             runState = 1; // Victory runState value
+            pthread_exit(NULL);
           }
         }
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
@@ -296,6 +276,7 @@ void* changeHeroState(void* data){
             map[heroPosition[0]][heroPosition[1]] = 3;
           } else if(map[heroPosition[0]][heroPosition[1]] == 2){
             runState = 1; // Victory runState value
+            pthread_exit(NULL);
           }
         }
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
@@ -313,6 +294,7 @@ void* changeHeroState(void* data){
             map[heroPosition[0]][heroPosition[1]] = 3;
           } else if(map[heroPosition[0]][heroPosition[1]] == 2){
             runState = 1; // Victory runState value
+            pthread_exit(NULL);
           }
         }
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
@@ -330,6 +312,7 @@ void* changeHeroState(void* data){
             map[heroPosition[0]][heroPosition[1]] = 3;
           } else if(map[heroPosition[0]][heroPosition[1]] == 2){
             runState = 1; // Victory runState value
+            pthread_exit(NULL);
           }
         }
         printf("Hero position: [%d, %d]\n", heroPosition[0], heroPosition[1]);
@@ -340,20 +323,16 @@ void* changeHeroState(void* data){
           monsterHealths[entity-1] -= heroAD;
         }
     } else if(command=='e'){
-        if(entityMap[heroPosition[0]][heroPosition[1]] == 5){
+        if(map[heroPosition[0]][heroPosition[1]] == 5){
           printf("Open a treasure!\n");
-          unsigned int randval;
-          FILE *f = fopen("/dev/random", "r");
-          fread(&randval, sizeof(randval), 1, f);
-          fclose(f);
-          int ranNum = randval % 1;
-          if(ranNum){
+          if(rand() % (2)){
             heroAD++; //Boost one point of the hero attack damage
           } else {
             pthread_mutex_lock(&health_mutex);
             heroHealth++;// Heal one health point
             pthread_mutex_unlock(&health_mutex);
           }
+          map[heroPosition[0]][heroPosition[1]] = 3;
         }
     }
   }
@@ -370,7 +349,7 @@ void *monsterCycle(void *data) {
     FILE *f = fopen("/dev/random", "r");
     fread(&randval, sizeof(randval), 1, f);
     fclose(f);
-    int ranNum = randval % 400000 + 100000;
+    int ranNum = randval % 1500000 + 1000000;
     //printf("monster %d\n\tpos %d, %d\n\thealth %d \n", info->id, info->pos[0], info->pos[1], monsterHealths[info->id]);
     if (info->pos[0] == heroPosition[0] && info->pos[1] == heroPosition[1]) { // If player is in the same room
       pthread_mutex_lock(&health_mutex);
@@ -382,21 +361,21 @@ void *monsterCycle(void *data) {
     } 
     else { // If the monster is alone
       // Select a cell for it
-      int i = rand() % 10;
-      int j = rand() % 10;
-      pthread_mutex_lock(&cells_mutex[i*10+j]);
       entityMap[info->pos[0]][info->pos[1]] = 0;
+      pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);
+      int i = rand() % n;
+      int j = rand() % n;
+      pthread_mutex_lock(&cells_mutex[i*10+j]);
       // If the selected cell isn't a room or already has a monster, change it
-      while (map[i][j] < 3 || entityMap[i][j] > 0) {
+      while (entityMap[i][j] > 0 || map[i][j] < 3) {
         pthread_mutex_unlock(&cells_mutex[i*10+j]);
-        i = rand() % 10;
-        j = rand() % 10;
+        i = rand() % n;
+        j = rand() % n;
         pthread_mutex_lock(&cells_mutex[i*10+j]);
       }
       entityMap[i][j] = info->id + 1; // New pos
       info->pos[0] = i;
       info->pos[1] = j;
-      pthread_mutex_unlock(&cells_mutex[i*10+j]);
     }
     //usleep MUST be a random between 100000 and 500000 microseconds
     monsterStatus[info->id] = 0; //Monster waiting
@@ -415,13 +394,14 @@ int main(void) {
   pthread_mutex_init(&health_mutex, NULL);
   pthread_cond_init(&command_condition, NULL);
 
-  n = 10;//It MUST be changed for the user input
+  n = 20;//It MUST be changed for the user input
 
-  /*
+  /**/
   int upper = n-1;
-  for(int i = 0; i < n-1; i++){
-    for(int j = 0; j < n-1; j++){
+  for(int i = 0; i < 29; i++){
+    for(int j = 0; j < 29; j++){
       map[i][j] = 0;
+      entityMap[i][j] = 0;
     }
   }
   
@@ -429,12 +409,14 @@ int main(void) {
   int i = (rand() % (upper - 0 + 1));
   int j = (rand() % (upper - 0 + 1)); //choose the starting room
   map[i][j] = 1;
+  heroPosition[0] = i;
+  heroPosition[1] = j;
   rooms[0][0] = i;
   rooms[0][1] = j; //add first room to list
   int m = n-1;
   fill(i,j,m); //fill the map for the game
   printf("Dungeon Done\n");
-  */
+  /**/
 
   pthread_mutex_t cells_mutex_local[n*n]; // Allocate memory to the global cells_mutex array
   cells_mutex = cells_mutex_local;
@@ -457,12 +439,12 @@ int main(void) {
     monsterHLocal[i] = 3;//3 is the original health value
     monsterSLocal[i] = 1;//Monster active
     // Select a cell for it
-    int j = rand() % 10;
-    int k = rand() % 10;
+    int j = rand() % n;
+    int k = rand() % n;
     // If the selected cell isn't a room or already has a monster, change it
     while (map[j][k] < 3 || entityMap[j][k] > 0) {
-      j = rand() % 10;
-      k = rand() % 10;
+      j = rand() % n;
+      k = rand() % n;
     }
     entityMap[j][k] = i + 1; // Monster starting in that room
     monster->pos[0] = j;
@@ -476,32 +458,78 @@ int main(void) {
   pthread_create(&chHeroState, NULL, &changeHeroState, NULL);
 
   //Rendering cycle
-  while(heroHealth>0){ //Map rendering by text
+  /*
+  int gd = DETECT, gm;
+  initgraph(&gd, &gm, NULL);
+  while(runState == 0){
+    int x = 0;
+    int y = 0;
+    for(int i = 0; i < n; i++) {
+      for(int j = 0; j < n; j++) {
+        if(map[i][j]==0){
+          setcolor(15);//WHITE
+          bar(12+x,12+y,22+x,22+y);
+        }
+        else if(map[i][j]==1){//Start room
+          setcolor(15);//WHITE
+          rectangle(12+x,12+y,22+x,22+y);
+          outtextxy(12+x+2,12+y+3, "*");
+        }
+        else if(map[i][j]==2){//Final room
+          setcolor(4);//RED
+          bar(12+x,12+y,22+x,22+y);
+        }
+        else if(map[i][j]>3){
+          outtextxy(12+x+2,12+y, "?");
+        }
+        x+=12;
+      }
+      x=0;
+      y+=12;
+    }
+    delay(20);
+    cleardevice();
+  }
+  closegraph();
+  */
+  /**/
+  while(runState==0){ //Map rendering by text
     system("clear");
     printf("\n\n\t Rogue Thread \n\n");
     printf("Health %d\t Attack %d\n\n", heroHealth, heroAD);
     for(int i = 0; i < n;i++) {
         for(int j = 0; j < n;j++) {
+          if(entityMap[i][j] > 0){
+            printf("%d", entityMap[i][j]);
+          }
+          if(heroPosition[0]==i && heroPosition[1]==j){
+            printf("*");
+          }
           if(map[i][j] == 0){ //wall
-            printf("■\t");
+            printf("■  ");
           }
           else if(map[i][j] == 1){//start
-            printf("⛋\t");
+            printf("⛋  ");
           }
-          else if(map[i][j] == 2){//finish
-            printf("⛾\t");
+          else if(entityMap[i][j] == 0 && map[i][j]==3){//empty
+            printf("□  ");
           }
-          else if(entityMap[i][j] == 0 && map[i][j]>=3){//empty
-            printf("□\t");
-          }else{
-            printf("%d\t", entityMap[i][j]);
+          else if(map[i][j]>3 || map[i][j] == 2){//treasure or trap
+            printf("?  ");
           }
         }
         printf("\n");
     }
     printf("\n");
-    //sleep(1);
+    delay(20);
   }
+  if(runState == 1){
+    printf("VICTORY\n");
+  }else if(runState == 2){
+    printf("YOU DIED!\n");
+  }
+
+  /**/
   //Synchronize threads
   pthread_join(chHeroState, NULL);
   for (int i = 0; i < nMonsters; i++) {
