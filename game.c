@@ -45,7 +45,7 @@ int entityMap[30][30];
 
 int heroPosition[2] = {5, 5};
 pthread_cond_t command_condition;
-pthread_mutex_t command_mutex, mutex_entitys, health_mutex;
+pthread_mutex_t command_mutex, health_mutex;
 pthread_mutex_t *cells_mutex;
 
 int heroHealth = 5;
@@ -382,9 +382,7 @@ void *monsterCycle(void *data) {
     usleep(ranNum);             // 100000 - 500000 microseconds = 0.1 - 0.5 seconds
     monsterStatus[info->id] = 1; //Active monster
   }
-  pthread_mutex_lock(&mutex_entitys);
   entityMap[info->pos[0]][info->pos[1]] = 0;
-  pthread_mutex_unlock(&mutex_entitys);
   pthread_exit(NULL);
 }
 
@@ -426,7 +424,6 @@ int main(void) {
   int monsterSLocal[n]; // Allocate memory to the global monsterStatus array
   monsterStatus = monsterSLocal;
   pthread_t monsters[nMonsters];
-  pthread_mutex_init(&mutex_entitys, NULL);
   for (int i = 0; i < n*n; i++) {
     pthread_mutex_init(&cells_mutex[i], NULL);
   }
@@ -459,6 +456,7 @@ int main(void) {
 
   //Rendering cycle
   /*
+  XInitThreads();
   int gd = DETECT, gm;
   initgraph(&gd, &gm, NULL);
   while(runState == 0){
@@ -491,7 +489,7 @@ int main(void) {
     cleardevice();
   }
   closegraph();
-  */
+  /**/
   /**/
   while(runState==0){ //Map rendering by text
     system("clear");
@@ -543,7 +541,6 @@ int main(void) {
   //Destroy mutexes and conditions
   pthread_mutex_destroy(&command_mutex);
   pthread_cond_destroy(&command_condition);
-  pthread_mutex_destroy(&mutex_entitys);
   pthread_mutex_destroy(&health_mutex);
   return 0;
 }
