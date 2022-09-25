@@ -362,16 +362,16 @@ void *monsterCycle(void *data) {
     else { // If the monster is alone
       // Select a cell for it
       entityMap[info->pos[0]][info->pos[1]] = 0;
-      pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);
+      pthread_mutex_unlock(&cells_mutex[info->pos[0]*10+info->pos[1]]);//Current cell
       int i = rand() % n;
       int j = rand() % n;
-      pthread_mutex_lock(&cells_mutex[i*10+j]);
+      pthread_mutex_lock(&cells_mutex[i*10+j]);//Possible future
       // If the selected cell isn't a room or already has a monster, change it
-      while (entityMap[i][j] > 0 || map[i][j] < 3) {
-        pthread_mutex_unlock(&cells_mutex[i*10+j]);
+      while (map[i][j] < 3) {
+        pthread_mutex_unlock(&cells_mutex[i*10+j]);//Imposible cell
         i = rand() % n;
         j = rand() % n;
-        pthread_mutex_lock(&cells_mutex[i*10+j]);
+        pthread_mutex_lock(&cells_mutex[i*10+j]);//New Possible future
       }
       entityMap[i][j] = info->id + 1; // New pos
       info->pos[0] = i;
@@ -391,8 +391,21 @@ int main(void) {
   pthread_mutex_init(&command_mutex, NULL);
   pthread_mutex_init(&health_mutex, NULL);
   pthread_cond_init(&command_condition, NULL);
-
-  n = 20;//It MUST be changed for the user input
+  printf("Type the mode's numer: \n1 - Easy\n2 - Medium\n3 - Hard\n");  
+  scanf("%d", &n);
+  if(n == 1){
+    n = 10;
+    printf("Map 10x10\n");
+  } else if(n == 2){
+    n = 20;
+    printf("Map 20x20\n");
+  } else if (n == 3){
+    n = 30;
+    printf("Map 30x30\n");
+  } else{
+    printf("You have to choose between 1, 2 and 3\n");
+    exit(1);
+  }
 
   /**/
   int upper = n-1;
@@ -402,6 +415,7 @@ int main(void) {
       entityMap[i][j] = 0;
     }
   }
+  printf("CEROS");
   
   srand(time(0));
   int i = (rand() % (upper - 0 + 1));
@@ -446,6 +460,7 @@ int main(void) {
     entityMap[j][k] = i + 1; // Monster starting in that room
     monster->pos[0] = j;
     monster->pos[1] = k;
+    pthread_mutex_lock(&cells_mutex[monster->pos[0]*10+monster->pos[1]]);//Current cell
     pthread_create(&monsters[i], NULL, &monsterCycle, (void *)monster);
   }
 
@@ -497,24 +512,25 @@ int main(void) {
     printf("Health %d\t Attack %d\n\n", heroHealth, heroAD);
     for(int i = 0; i < n;i++) {
         for(int j = 0; j < n;j++) {
-          if(entityMap[i][j] > 0){
-            printf("%d", entityMap[i][j]);
-          }
           if(heroPosition[0]==i && heroPosition[1]==j){
             printf("*");
           }
-          if(map[i][j] == 0){ //wall
-            printf("■  ");
+          else if(map[i][j] == 0){ //wall
+            printf("■");
           }
           else if(map[i][j] == 1){//start
-            printf("⛋  ");
+            printf("⛋");
           }
           else if(entityMap[i][j] == 0 && map[i][j]==3){//empty
-            printf("□  ");
+            printf("□");
+          }
+          if(entityMap[i][j] > 0){
+            printf("M", entityMap[i][j]);
           }
           else if(map[i][j]>3 || map[i][j] == 2){//treasure or trap
-            printf("?  ");
+            printf("?");
           }
+          printf("    ");
         }
         printf("\n");
     }
