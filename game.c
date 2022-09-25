@@ -407,6 +407,7 @@ int main(void) {
     exit(1);
   }
 
+  printf("The code can loop sometimes, if this is the last message please restart\n");
   /**/
   int upper = n-1;
   for(int i = 0; i < 29; i++){
@@ -415,7 +416,6 @@ int main(void) {
       entityMap[i][j] = 0;
     }
   }
-  printf("CEROS");
   
   srand(time(0));
   int i = (rand() % (upper - 0 + 1));
@@ -427,7 +427,7 @@ int main(void) {
   rooms[0][1] = j; //add first room to list
   int m = n-1;
   fill(i,j,m); //fill the map for the game
-  printf("Dungeon Done\n");
+  printf("Dungeon Done. Wait a moment...\n");
   /**/
 
   pthread_mutex_t cells_mutex_local[n*n]; // Allocate memory to the global cells_mutex array
@@ -452,15 +452,17 @@ int main(void) {
     // Select a cell for it
     int j = rand() % n;
     int k = rand() % n;
+    pthread_mutex_lock(&cells_mutex[j*10+k]);//Posible cell
     // If the selected cell isn't a room or already has a monster, change it
     while (map[j][k] < 3 || entityMap[j][k] > 0) {
+      pthread_mutex_unlock(&cells_mutex[j*10+k]);//Imposible cell
       j = rand() % n;
       k = rand() % n;
+      pthread_mutex_lock(&cells_mutex[j*10+k]);//Posible cell
     }
     entityMap[j][k] = i + 1; // Monster starting in that room
     monster->pos[0] = j;
     monster->pos[1] = k;
-    pthread_mutex_lock(&cells_mutex[monster->pos[0]*10+monster->pos[1]]);//Current cell
     pthread_create(&monsters[i], NULL, &monsterCycle, (void *)monster);
   }
 
@@ -527,10 +529,10 @@ int main(void) {
           if(entityMap[i][j] > 0){
             printf("M", entityMap[i][j]);
           }
-          else if(map[i][j]>3 || map[i][j] == 2){//treasure or trap
+          else if(map[i][j]>3 || map[i][j] == 2){//treasure or trap or end
             printf("?");
           }
-          printf("    ");
+          printf("   ");
         }
         printf("\n");
     }
